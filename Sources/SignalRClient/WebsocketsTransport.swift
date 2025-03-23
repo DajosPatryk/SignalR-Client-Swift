@@ -37,15 +37,18 @@ public class WebsocketsTransport: NSObject, Transport, URLSessionWebSocketDelega
         authenticationChallengeHandler = options.authenticationChallengeHandler
 
         var request = URLRequest(url: convertUrl(url: url))
-        populateHeaders(headers: options.headers, request: &request)
-        setAccessToken(accessTokenProvider: options.accessTokenProvider, request: &request)
         urlSession = URLSession(configuration: .default, delegate: self, delegateQueue: OperationQueue())
-        webSocketTask = urlSession!.webSocketTask(with: request)
-        if let maximumWebsocketMessageSize = options.maximumWebsocketMessageSize {
-            webSocketTask?.maximumMessageSize = maximumWebsocketMessageSize
-        }
+        populateHeaders(headers: options.headers, request: &request)
+        
+        Task {
+            await setAccessToken(accessTokenProvider: options.accessTokenProvider, request: &request)
+            webSocketTask = urlSession!.webSocketTask(with: request)
+            if let maximumWebsocketMessageSize = options.maximumWebsocketMessageSize {
+                webSocketTask?.maximumMessageSize = maximumWebsocketMessageSize
+            }
 
-        webSocketTask!.resume()
+            webSocketTask!.resume()
+        }
     }
 
     public func send(data: Data, sendDidComplete: @escaping (Error?) -> Void) {
@@ -210,8 +213,8 @@ public class WebsocketsTransport: NSObject, Transport, URLSessionWebSocketDelega
         }
     }
 
-    @inline(__always) private func setAccessToken(accessTokenProvider: () -> String?, request: inout URLRequest) {
-        if let accessToken = accessTokenProvider() {
+    @inline(__always) private func setAccessToken(accessTokenProvider: () async -> String?, request: inout URLRequest) async {
+        if let accessToken = await accessTokenProvider() {
             request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         }
     }
